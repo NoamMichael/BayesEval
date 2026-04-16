@@ -12,7 +12,7 @@ Each domain in BayesEval presents a different class of Bayesian inference proble
 
 | Domain | Description | Ground Truth Source | Status |
 |--------|-------------|-------------------|--------|
-| [LifeEval](../LifeEval/) | Actuarial mortality estimation | Gompertz distribution fitted to US life tables | Complete |
+| [MedEval](domains/MedEval/) | Differential-diagnosis calibration | DDXPlus synthetic patient differentials | Scaffold |
 | *More domains TBD* | | | |
 
 ## Scoring Framework
@@ -42,7 +42,26 @@ BayesEval/
 
 ```bash
 pip install -r requirements.txt
+export OPENROUTER_API_KEY=...
 ```
+
+## Running Evaluations
+
+All runs are driven by `config.yaml` — edit it instead of passing flags:
+
+```bash
+python eval.py --config config.yaml
+```
+
+The config selects `domains` (list of folder names under `domains/`, or `all`),
+`models` (OpenRouter slugs), `mode` (`batch` async or `seq`), and `concurrency`.
+A live `rich` dashboard tracks progress per `(domain, model)` task. Raw
+responses land in `results/<domain>/<model>.csv`; a combined `results/summary.csv`
+is written at the end.
+
+Domains are auto-discovered: drop a new folder under `domains/` with
+`Data/benchmark.csv` and a `scoring.py` exposing `score(results_df, benchmark_df)`
+and it will be picked up with no changes to `eval.py`.
 
 ## Related Work
 

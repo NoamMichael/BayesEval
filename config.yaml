@@ -1,0 +1,18 @@
+# BayesEval run configuration. Edit this file instead of passing flags.
+
+domains: [MedEval]          # list of domain folder names under domains/, or "all"
+
+models:                     # OpenRouter model slugs
+  - openai/gpt-4o-mini
+  - anthropic/claude-3.5-sonnet
+
+mode: batch                 # batch (async, concurrent) | seq (one at a time)
+concurrency: 8              # only used when mode: batch
+max_questions: null         # null = full benchmark; int to truncate for quick runs
+output_dir: results         # relative to repo root
+
+openrouter:
+  api_key_env: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  timeout_s: 60
+  max_retries: 3

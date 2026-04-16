@@ -1,0 +1,7 @@
+domains/**/*.zip
+domains/WGD/Data/Photos/*.jpg
+domains/WGD/Data/Photos/*.JPG
+
+results/
+
+thoughts/
