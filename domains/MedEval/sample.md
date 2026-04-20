@@ -14,32 +14,32 @@ Return only the JSON object requested.
 ## User prompt (question_id `med_test_00000`)
 
 ```
-You are a diagnostic reasoning assistant. Based on the patient vignette below, give your single most likely pathology. You MUST commit to one diagnosis — do not hedge or list alternatives.
+You are a diagnostic reasoning assistant. Based on the patient vignette below, pick the single most likely pathology from the candidate list. You MUST commit to one diagnosis — do not hedge or list alternatives.
 
-Patient: 51-year-old male.
-Reported findings:
-- Have you been coughing up blood?: yes
-- Do you have pain somewhere, related to your reason for consulting?: yes
-- Characterize your pain: sensitive
-- Characterize your pain: a knife stroke
-- Do you feel pain somewhere? posterior chest wall(R)
-- Do you feel pain somewhere? posterior chest wall(L)
-- How intense is the pain? 5
-- Does the pain radiate to another location? nowhere
-- How precisely is the pain located? 4
-- How fast did the pain appear? 5
-- Are you experiencing shortness of breath or difficulty breathing in a significant way?: yes
-- Do you smoke cigarettes?: yes
-- Do you constantly feel fatigued or do you have non-restful sleep?: yes
-- Have you recently had a loss of appetite or do you get full more quickly then usually?: yes
-- Have you had an involuntary weight loss over the last 3 months?: yes
-- Are you a former smoker?: yes
-- Do you have a cough?: yes
-- Have you traveled out of the country in the last 4 weeks? N
-- Are you exposed to secondhand cigarette smoke on a daily basis?: yes
-- Do you have family members who have had lung cancer?: yes
+{"patient": {"age": 51, "sex": "male"}, "findings": [{"finding": "Have you been coughing up blood?", "value": "yes"}, {"finding": "Do you have pain somewhere, related to your reason for consulting?", "value": "yes"}, {"finding": "Characterize your pain", "value": "sensitive"}, {"finding": "Characterize your pain", "value": "a knife stroke"}, {"finding": "Do you feel pain somewhere?", "value": "posterior chest wall(R)"}, {"finding": "Do you feel pain somewhere?", "value": "posterior chest wall(L)"}, {"finding": "How intense is the pain?", "value": "5"}, {"finding": "Does the pain radiate to another location?", "value": "nowhere"}, {"finding": "How precisely is the pain located?", "value": "4"}, {"finding": "How fast did the pain appear?", "value": "5"}, {"finding": "Are you experiencing shortness of breath or difficulty breathing in a significant way?", "value": "yes"}, {"finding": "Do you smoke cigarettes?", "value": "yes"}, {"finding": "Do you constantly feel fatigued or do you have non-restful sleep?", "value": "yes"}, {"finding": "Have you recently had a loss of appetite or do you get full more quickly then usually?", "value": "yes"}, {"finding": "Have you had an involuntary weight loss over the last 3 months?", "value": "yes"}, {"finding": "Are you a former smoker?", "value": "yes"}, {"finding": "Do you have a cough?", "value": "yes"}, {"finding": "Have you traveled out of the country in the last 4 weeks?", "value": "N"}, {"finding": "Are you exposed to secondhand cigarette smoke on a daily basis?", "value": "yes"}, {"finding": "Do you have family members who have had lung cancer?", "value": "yes"}]}
 
-How confident are you (0 to 1) that your diagnosis is the exact pathology recorded for this patient? Respond with ONLY valid JSON: {"Answer": "<pathology>", "Confidence": "0.XX"}
+Candidate pathologies:
+- Bronchitis
+- Acute pulmonary edema
+- Pancreatic neoplasm
+- Stable angina
+- Pulmonary neoplasm
+- Guillain-Barré syndrome
+- Tuberculosis
+- Pneumonia
+- Atrial fibrillation
+- Myasthenia gravis
+- Anemia
+- Unstable angina
+- Possible NSTEMI / STEMI
+- Bronchiectasis
+- Myocarditis
+- Pulmonary embolism
+- Spontaneous rib fracture
+- Acute dystonic reactions
+- Bronchospasm / acute asthma exacerbation
+
+How confident are you (0 to 1) that your chosen pathology is the correct diagnosis? Respond with ONLY valid JSON: {"Answer": "<pathology>", "Confidence": "0.XX"}
 ```
 
 ## Expected response format

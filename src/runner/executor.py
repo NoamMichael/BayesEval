@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
@@ -17,6 +18,8 @@ class RowResult:
     confidence: float | None
     raw: str
     error: str | None
+    tok_in: int = 0
+    tok_out: int = 0
 
 
 async def _run_one(
@@ -26,8 +29,12 @@ async def _run_one(
     on_event,
     task_key: tuple[str, str],
 ) -> RowResult:
-    resp = await client.complete(model, row["question_prompt"], row["confidence_prompt"])
-    rr = RowResult(row["question_id"], resp.answer, resp.confidence, resp.raw, resp.error)
+    image_path = row.get("image_path")
+    image_uri = Path(image_path).read_text() if image_path else None
+    resp = await client.complete(model, row["question_prompt"], row["confidence_prompt"],
+                                 image_uri=image_uri)
+    rr = RowResult(row["question_id"], resp.answer, resp.confidence, resp.raw, resp.error,
+                   resp.tok_in, resp.tok_out)
     on_event(task_key, rr)
     return rr
 

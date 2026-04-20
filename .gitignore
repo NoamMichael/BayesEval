@@ -1,7 +1,12 @@
 domains/**/*.zip
 domains/WGD/Data/Photos/*.jpg
 domains/WGD/Data/Photos/*.JPG
+domains/**/Photos-encoded/
 
 results/
+test-results/
 
 thoughts/
+
+.venv
+*__pycache__
