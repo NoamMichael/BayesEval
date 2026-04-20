@@ -85,7 +85,7 @@ def iter_patients(patients_zip: Path):
 
 
 def write_variant(pool, pct, emap, split, seed, outpath):
-    """Write a single benchmark CSV for a given removal percentage."""
+    """Write a single benchmark CSV for a given evidence-removal percentage."""
     rng_variant = random.Random(seed + pct)
     with open(outpath, "w", newline="") as f:
         w = csv.writer(f)
@@ -117,6 +117,69 @@ def write_variant(pool, pct, emap, split, seed, outpath):
     return len(pool)
 
 
+def reduce_candidates(differential, true_pathology, pct_remove, rng):
+    """Remove pct_remove% of candidate pathologies and renormalize.
+
+    Always keeps the true pathology. Removes the least-likely candidates
+    (after excluding the true pathology from removal consideration).
+    Returns the reduced, renormalized differential.
+    """
+    if pct_remove <= 0 or len(differential) <= 1:
+        return differential
+
+    n_remove = math.ceil(len(differential) * pct_remove / 100)
+    # Never remove the true pathology, never remove all candidates
+    max_remove = len(differential) - 1
+    n_remove = min(n_remove, max_remove)
+
+    # Sort non-true pathologies by probability (ascending) to remove least likely first
+    removable = [(name, prob) for name, prob in differential if name != true_pathology]
+    removable.sort(key=lambda x: x[1])
+
+    # Remove the n_remove least likely (but if true_pathology is least likely, skip it)
+    to_remove = set(name for name, _ in removable[:n_remove])
+
+    reduced = [(name, prob) for name, prob in differential if name not in to_remove]
+
+    # Renormalize
+    total = sum(prob for _, prob in reduced)
+    if total > 0:
+        reduced = [(name, prob / total) for name, prob in reduced]
+
+    return reduced
+
+
+def write_candidate_variant(pool, pct, emap, split, seed, outpath):
+    """Write a benchmark CSV with pct% of candidate pathologies removed."""
+    rng_variant = random.Random(seed + pct)
+    with open(outpath, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "question_id", "question_prompt", "confidence_prompt",
+            "age", "sex", "true_pathology", "differential_json",
+        ])
+        for i, p in enumerate(pool):
+            evidences = ast.literal_eval(p["EVIDENCES"])
+            differential = ast.literal_eval(p["DIFFERENTIAL_DIAGNOSIS"])
+
+            reduced_diff = reduce_candidates(
+                differential, p["PATHOLOGY"], pct, rng_variant)
+
+            vignette = build_vignette(p["AGE"], p["SEX"], evidences, emap)
+            candidates = [name for name, _ in reduced_diff]
+            rng_variant.shuffle(candidates)
+            candidates_str = "\n".join(f"- {c}" for c in candidates)
+            w.writerow([
+                f"med_{split}_{i:05d}_c{pct}",
+                PATHOLOGY_INSTRUCTION.format(
+                    vignette=vignette, candidates=candidates_str),
+                CONFIDENCE_INSTRUCTION,
+                p["AGE"], p["SEX"], p["PATHOLOGY"],
+                json.dumps(reduced_diff),
+            ])
+    return len(pool)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ddxplus", type=Path,
@@ -130,8 +193,12 @@ def main():
                     default=Path(__file__).parent / "Data")
     ap.add_argument("--min-findings", type=int, default=0,
                     help="Keep only patients with >= this many findings")
+    ap.add_argument("--min-candidates", type=int, default=0,
+                    help="Keep only patients with >= this many candidates in differential")
     ap.add_argument("--removal-pcts", default="0",
-                    help="Comma-separated removal percentages (e.g. 0,10,25,50)")
+                    help="Comma-separated evidence removal percentages (e.g. 0,10,25,50)")
+    ap.add_argument("--candidate-removal-pcts", default=None,
+                    help="Comma-separated candidate pathology removal percentages (e.g. 0,10,25,50)")
     args = ap.parse_args()
 
     emap = load_evidence_map(args.ddxplus / "release_evidences.json")
@@ -146,6 +213,11 @@ def main():
         pool = [p for p in pool
                 if len(ast.literal_eval(p["EVIDENCES"])) >= args.min_findings]
         print(f"Filtered to {len(pool)} patients with >= {args.min_findings} findings")
+
+    if args.min_candidates > 0:
+        pool = [p for p in pool
+                if len(ast.literal_eval(p["DIFFERENTIAL_DIAGNOSIS"])) >= args.min_candidates]
+        print(f"Filtered to {len(pool)} patients with >= {args.min_candidates} candidates")
 
     pcts = [int(x) for x in args.removal_pcts.split(",")]
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -173,6 +245,33 @@ def main():
                     for row in reader:
                         w.writerow(row + [str(pct)])
         print(f"Wrote combined benchmark ({len(pool) * len(pcts)} questions) to {combined}")
+
+    # Candidate-removal variants
+    if args.candidate_removal_pcts:
+        cpcts = [int(x) for x in args.candidate_removal_pcts.split(",")]
+        cvariant_paths = []
+        for pct in cpcts:
+            outpath = args.outdir / f"benchmark_candidates{pct}.csv"
+            n = write_candidate_variant(pool, pct, emap, args.split, args.seed, outpath)
+            cvariant_paths.append(outpath)
+            print(f"Wrote {n} questions (candidates -{pct}%) to {outpath}")
+
+        if len(cpcts) > 1:
+            combined = args.outdir / "benchmark_candidates_combined.csv"
+            with open(combined, "w", newline="") as fout:
+                w = csv.writer(fout)
+                w.writerow([
+                    "question_id", "question_prompt", "confidence_prompt",
+                    "age", "sex", "true_pathology", "differential_json",
+                    "candidate_removal_pct",
+                ])
+                for pct, vpath in zip(cpcts, cvariant_paths):
+                    with open(vpath) as fin:
+                        reader = csv.reader(fin)
+                        next(reader)
+                        for row in reader:
+                            w.writerow(row + [str(pct)])
+            print(f"Wrote combined candidates benchmark ({len(pool) * len(cpcts)} questions) to {combined}")
 
 
 if __name__ == "__main__":

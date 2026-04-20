@@ -9,4 +9,5 @@ test-results/
 thoughts/
 
 .venv
+.claude
 *__pycache__

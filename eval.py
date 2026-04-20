@@ -170,7 +170,8 @@ async def _main(cfg: dict) -> None:
                              cfg["concurrency"], on_event)
                     for model in cfg["models"]
                 ]
-                results_list = await asyncio.gather(*tasks)
+                results_list = list(await asyncio.gather(*tasks))
+
                 meta_cols = [c for c in bench.columns
                              if c not in {"question_prompt", "confidence_prompt",
                                           "gold_response", "image_path"}]
@@ -207,12 +208,136 @@ async def _main(cfg: dict) -> None:
     print("\n" + summary.to_string(index=False))
 
 
+def _scan_errors(cfg: dict, output_dir: Path) -> dict[str, dict[str, set[str]]]:
+    """Lightweight scan: read result CSVs and collect errored question_ids per (domain, model).
+
+    Returns {domain: {model: {question_id, ...}}} only for pairs with errors.
+    Does NOT load benchmarks or images.
+    """
+    errors_by_domain: dict[str, dict[str, set[str]]] = {}
+    for d in cfg["domains"]:
+        domain = d["name"]
+        for model in cfg["models"]:
+            results_path = output_dir / domain / f"{slugify(model)}.csv"
+            if not results_path.exists():
+                continue
+            prev = pd.read_csv(results_path, usecols=["question_id", "error"])
+            errored = prev[prev["error"].notna()]
+            if errored.empty:
+                continue
+            errors_by_domain.setdefault(domain, {})[model] = set(errored["question_id"])
+    return errors_by_domain
+
+
+async def _retry_main(cfg: dict) -> None:
+    """Load existing results, retry only errored questions, update files.
+
+    Processes one domain at a time to avoid holding all benchmarks + encoded
+    images in memory simultaneously (important for image-heavy domains like WGD).
+    """
+    api_key = os.environ.get(cfg["openrouter"]["api_key_env"])
+    if not api_key:
+        sys.exit(f"Missing env var {cfg['openrouter']['api_key_env']}")
+
+    output_dir = REPO_ROOT / cfg["output_dir"]
+
+    errors_by_domain = _scan_errors(cfg, output_dir)
+    if not errors_by_domain:
+        print("No errors to retry.")
+        return
+
+    total_retries = sum(
+        len(ids) for models in errors_by_domain.values() for ids in models.values()
+    )
+    n_pairs = sum(len(models) for models in errors_by_domain.values())
+    print(f"Retrying {total_retries} errored questions across {n_pairs} model/domain pairs")
+
+    domain_cfgs = {d["name"]: d for d in cfg["domains"]}
+
+    client = OpenRouterClient(
+        api_key=api_key,
+        base_url=cfg["openrouter"]["base_url"],
+        timeout_s=cfg["openrouter"]["timeout_s"],
+        max_retries=cfg["openrouter"]["max_retries"],
+    )
+
+    summary_rows: list[dict] = []
+    try:
+        with Dashboard("BayesEval · Retry") as dash:
+            for domain, model_errors in errors_by_domain.items():
+                for model, errored_ids in model_errors.items():
+                    dash.register(domain, model, total=len(errored_ids))
+
+            def on_event(key, row_result):
+                dash.record(
+                    key[0], key[1],
+                    error=row_result.error is not None,
+                    brier=None,
+                    question_id=str(row_result.question_id),
+                    answer=row_result.answer,
+                    tok_in=row_result.tok_in,
+                    tok_out=row_result.tok_out,
+                )
+
+            for domain, model_errors in errors_by_domain.items():
+                bench_file = domain_cfgs[domain].get("benchmark_file", "benchmark.csv")
+                bench, score_fn = load_domain(domain, bench_file)
+
+                retry_tasks = []
+                models_to_retry = []
+                for model, errored_ids in model_errors.items():
+                    retry_bench = bench[bench["question_id"].isin(errored_ids)].reset_index(drop=True)
+                    retry_tasks.append(
+                        run_task(client, domain, model, retry_bench, cfg["mode"],
+                                 cfg["concurrency"], on_event)
+                    )
+                    models_to_retry.append(model)
+
+                retry_results = await asyncio.gather(*retry_tasks)
+
+                meta_cols = [c for c in bench.columns
+                             if c not in {"question_prompt", "confidence_prompt",
+                                          "gold_response", "image_path"}]
+                results_cols = ["question_id", "Answer", "Confidence", "raw", "error"]
+                for model, retry_res in zip(models_to_retry, retry_results):
+                    out_path = output_dir / domain / f"{slugify(model)}.csv"
+                    prev = pd.read_csv(out_path)
+                    ok = prev[prev["error"].isna()][results_cols]
+                    merged = pd.concat([ok, retry_res], ignore_index=True)
+                    merged_with_meta = merged.merge(bench[meta_cols], on="question_id", how="left")
+                    merged_with_meta.to_csv(out_path, index=False)
+                    scored = score_fn(merged, bench)
+                    mean_brier = float(scored["brier"].dropna().mean()) if "brier" in scored else float("nan")
+                    err_count = int(merged["error"].notna().sum())
+                    summary_rows.append({
+                        "domain": domain,
+                        "model": model,
+                        "n": len(merged),
+                        "errors": err_count,
+                        "mean_brier": mean_brier,
+                        "results_csv": str(out_path.relative_to(REPO_ROOT)),
+                    })
+
+            dash.refresh()
+    finally:
+        await client.aclose()
+
+    if summary_rows:
+        summary = pd.DataFrame(summary_rows)
+        print("\n" + summary.to_string(index=False))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=Path, default=REPO_ROOT / "config.yaml")
+    ap.add_argument("--retry-errors", action="store_true",
+                    help="Re-run only errored questions from existing results")
     args = ap.parse_args()
     cfg = load_config(args.config)
-    asyncio.run(_main(cfg))
+    if args.retry_errors:
+        asyncio.run(_retry_main(cfg))
+    else:
+        asyncio.run(_main(cfg))
 
 
 if __name__ == "__main__":
