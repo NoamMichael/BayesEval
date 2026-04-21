@@ -86,6 +86,8 @@ python build_benchmark.py --n 500 --min-findings 10 \
 
 ## Scoring
 
+There is no single "correct" diagnosis — pathologies lie in a probability space defined by the DDXPlus differential. A model answering "Pneumonia" with 0.85 confidence when Pneumonia has 0.15 true probability is overconfident by 0.70, even if Pneumonia is the most likely diagnosis. For this reason, all calibration metrics (Brier Score, ECE, overconfidence) use `true_probability` from the differential rather than binary accuracy. Binary correct/incorrect would give full credit (1.0) for picking the top diagnosis regardless of how uncertain the differential actually is, masking systematic overconfidence.
+
 Given a results CSV with `question_id, Answer, Confidence`:
 
 ```python
