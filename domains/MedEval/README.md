@@ -89,9 +89,9 @@ python build_benchmark.py --n 500 --min-findings 10 \
 Given a results CSV with `question_id, Answer, Confidence`:
 
 ```python
-from scoring import score, murphy_decomposition
+from analysis.scoring import score_medeval, murphy_decomposition
 
-scored = score(results_df, benchmark_df)
+scored = score_medeval(results_df, benchmark_df)
 print(f"Brier Score: {scored['brier'].mean():.4f}")
 print(murphy_decomposition(scored))
 ```

@@ -6,9 +6,12 @@ BayesEval is a multi-domain benchmark suite for evaluating LLM calibration on Ba
 
 ## Repository Structure
 
+- `analysis/scoring.py` — Unified scoring module for all domains (Brier, Murphy decomposition)
+- `analysis/analysis.ipynb` — Calibration analysis and plots
+- `eval.py` — Cross-domain evaluation runner (config-driven)
+- `domains/` — Domain-specific benchmarks and data (WGD, LifeEval, MedEval)
 - `thoughts/` — Research notes, experiment logs, and design decisions
 - `requirements.txt` — Python dependencies
-- See `../LifeEval/` for the first completed domain (actuarial mortality estimation)
 
 ## Key Concepts
 

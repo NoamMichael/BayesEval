@@ -27,11 +27,14 @@ import csv
 import json
 from pathlib import Path
 
+import sys
+
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
 
-from scoring import GompertzParams, fit_gompertz_to_life_table
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from analysis.scoring import GompertzParams, fit_gompertz_to_life_table
 
 
 def conditional_survival(x: float, a: float, params: GompertzParams) -> float:

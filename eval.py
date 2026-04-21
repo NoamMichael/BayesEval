@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import os
 import re
 import sys
@@ -22,6 +21,7 @@ load_dotenv()
 import pandas as pd
 import yaml
 
+from analysis.scoring import get_scorer
 from src.runner.dashboard import Dashboard
 from src.runner.executor import run_task
 from src.runner.openrouter_client import OpenRouterClient
@@ -68,13 +68,7 @@ def load_domain(name: str, benchmark_file: str = "benchmark.csv"):
             f"{name}: missing benchmark at {benchmark_path}. "
             f"Run its build_benchmark.py first."
         )
-    scoring_path = domain_dir / "scoring.py"
-    if not scoring_path.exists():
-        raise FileNotFoundError(f"{name}: missing scoring.py")
-    spec = importlib.util.spec_from_file_location(f"{name}_scoring", scoring_path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
+    score_fn = get_scorer(name)
     benchmark = pd.read_csv(benchmark_path)
 
     if "photo" in benchmark.columns:
@@ -93,7 +87,7 @@ def load_domain(name: str, benchmark_file: str = "benchmark.csv"):
             lambda p: str(encoded_dir / f"{Path(p).stem}.txt")
         )
 
-    return benchmark, module.score
+    return benchmark, score_fn
 
 
 def _read_manifest(path: Path) -> dict:

@@ -10,10 +10,11 @@ Each domain in BayesEval presents a different class of Bayesian inference proble
 
 ## Domains
 
-| Domain | Description | Ground Truth Source | Status |
-|--------|-------------|-------------------|--------|
-| [MedEval](domains/MedEval/) | Differential-diagnosis calibration | DDXPlus synthetic patient differentials | Scaffold |
-| *More domains TBD* | | | |
+| Domain | Description | Ground Truth Source |
+|--------|-------------|-------------------|
+| [WGD](domains/WGD/) | Weight estimation from photos | Deterministic: measured weight within tolerance |
+| [LifeEval](domains/LifeEval/) | Actuarial mortality estimation | Gompertz conditional survival CDF |
+| [MedEval](domains/MedEval/) | Differential-diagnosis calibration | DDXPlus synthetic patient differentials |
 
 ## Scoring Framework
 
@@ -33,9 +34,17 @@ A perfectly calibrated model reports confidence `c` equal to the true probabilit
 BayesEval/
 ├── README.md
 ├── CLAUDE.md              # Development conventions and agent instructions
+├── eval.py                # Cross-domain evaluation runner
+├── config.yaml            # Run configuration (domains, models, concurrency)
 ├── requirements.txt       # Python dependencies
-├── thoughts/              # Research notes and experiment logs
-└── domains/               # Domain-specific benchmark implementations (TBD)
+├── analysis/
+│   ├── scoring.py         # Unified scoring module for all domains
+│   └── analysis.ipynb     # Calibration analysis and plots
+├── domains/
+│   ├── WGD/               # Weight Guessing Dataset
+│   ├── LifeEval/          # Actuarial mortality estimation
+│   └── MedEval/           # Differential diagnosis
+└── thoughts/              # Research notes and experiment logs
 ```
 
 ## Getting Started
@@ -59,9 +68,9 @@ A live `rich` dashboard tracks progress per `(domain, model)` task. Raw
 responses land in `results/<domain>/<model>.csv`; a combined `results/summary.csv`
 is written at the end.
 
-Domains are auto-discovered: drop a new folder under `domains/` with
-`Data/benchmark.csv` and a `scoring.py` exposing `score(results_df, benchmark_df)`
-and it will be picked up with no changes to `eval.py`.
+Scoring for all domains is in `analysis/scoring.py`. To add a new domain,
+add a scorer function there and register it in `_SCORERS`, then create
+`domains/<name>/Data/benchmark.csv`.
 
 ## Related Work
 
