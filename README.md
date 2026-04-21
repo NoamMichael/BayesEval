@@ -28,6 +28,28 @@ All domains share a common scoring framework based on strictly proper scoring ru
 
 A perfectly calibrated model reports confidence `c` equal to the true probability `p` for each question, yielding `BS = 0`.
 
+## Research Questions
+
+Analysis lives in `analysis/analysis.ipynb`. Figures are saved to `analysis/figs/`.
+
+### RQ 1: What is the nature of LLM calibration?
+
+Combined calibration curves for all models across all three domains. Each subplot overlays all models on one axis; dot size reflects the number of samples in that confidence bin.
+
+![Calibration Curves](analysis/figs/calibration_combined.png)
+
+### RQ 2: What role does task difficulty play in model calibration?
+
+Overconfidence (`Confidence - true_probability`) plotted against each domain's difficulty proxy:
+
+| Domain | Difficulty Proxy | Range | Harder |
+|--------|-----------------|-------|------------|
+| WGD | `within_lbs` — weight tolerance | 1--20 lbs | Lower |
+| LifeEval | `radius` — age window | 1--20 years | Lower |
+| MedEval | `removal_pct` — candidates removed from differential | 0, 10, 25, 50% | Lower |
+
+![Overconfidence by Difficulty](analysis/figs/overconfidence_by_difficulty.png)
+
 ## Project Structure
 
 ```
