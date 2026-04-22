@@ -61,7 +61,8 @@ def load_config(path: Path) -> dict:
 
 def load_domain(name: str, benchmark_file: str = "benchmark.csv"):
     """Return (benchmark_df, score_fn) for a domain."""
-    domain_dir = DOMAINS_DIR / name
+    dir_name = name.removesuffix("_SPD")
+    domain_dir = DOMAINS_DIR / dir_name
     benchmark_path = domain_dir / "Data" / benchmark_file
     if not benchmark_path.exists():
         raise FileNotFoundError(
@@ -122,13 +123,14 @@ async def _main(cfg: dict) -> None:
     output_dir = REPO_ROOT / cfg["output_dir"]
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    domain_data: dict[str, tuple[pd.DataFrame, object]] = {}
+    domain_data: dict[str, tuple[pd.DataFrame, object, bool]] = {}
     for d in cfg["domains"]:
         bench_file = d.get("benchmark_file", "benchmark.csv")
         bench, score_fn = load_domain(d["name"], bench_file)
         if cfg["max_questions"]:
             bench = bench.head(cfg["max_questions"]).reset_index(drop=True)
-        domain_data[d["name"]] = (bench, score_fn)
+        spd = d.get("spd", False)
+        domain_data[d["name"]] = (bench, score_fn, spd)
 
     client = OpenRouterClient(
         api_key=api_key,
@@ -141,7 +143,7 @@ async def _main(cfg: dict) -> None:
     summary_rows: list[dict] = []
     try:
         with Dashboard(title) as dash:
-            for domain, (bench, _) in domain_data.items():
+            for domain, (bench, _, _) in domain_data.items():
                 for model in cfg["models"]:
                     dash.register(domain, model, total=len(bench))
 
@@ -156,12 +158,12 @@ async def _main(cfg: dict) -> None:
                     tok_out=row_result.tok_out,
                 )
 
-            async def process_domain(domain, bench, score_fn):
+            async def process_domain(domain, bench, score_fn, spd=False):
                 out_domain = output_dir / domain
                 out_domain.mkdir(parents=True, exist_ok=True)
                 tasks = [
                     run_task(client, domain, model, bench, cfg["mode"],
-                             cfg["concurrency"], on_event)
+                             cfg["concurrency"], on_event, spd=spd)
                     for model in cfg["models"]
                 ]
                 results_list = list(await asyncio.gather(*tasks))
@@ -188,8 +190,8 @@ async def _main(cfg: dict) -> None:
                 return domain_rows
 
             all_domain_rows = await asyncio.gather(*[
-                process_domain(domain, bench, score_fn)
-                for domain, (bench, score_fn) in domain_data.items()
+                process_domain(domain, bench, score_fn, spd=spd)
+                for domain, (bench, score_fn, spd) in domain_data.items()
             ])
             for rows in all_domain_rows:
                 summary_rows.extend(rows)
@@ -276,6 +278,7 @@ async def _retry_main(cfg: dict) -> None:
             for domain, model_errors in errors_by_domain.items():
                 bench_file = domain_cfgs[domain].get("benchmark_file", "benchmark.csv")
                 bench, score_fn = load_domain(domain, bench_file)
+                spd = domain_cfgs[domain].get("spd", False)
 
                 retry_tasks = []
                 models_to_retry = []
@@ -283,7 +286,7 @@ async def _retry_main(cfg: dict) -> None:
                     retry_bench = bench[bench["question_id"].isin(errored_ids)].reset_index(drop=True)
                     retry_tasks.append(
                         run_task(client, domain, model, retry_bench, cfg["mode"],
-                                 cfg["concurrency"], on_event)
+                                 cfg["concurrency"], on_event, spd=spd)
                     )
                     models_to_retry.append(model)
 

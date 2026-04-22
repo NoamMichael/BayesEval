@@ -217,6 +217,9 @@ _SCORERS = {
     "WGD": score_wgd,
     "LifeEval": score_lifeeval,
     "MedEval": score_medeval,
+    "WGD_SPD": score_wgd,
+    "LifeEval_SPD": score_lifeeval,
+    "MedEval_SPD": score_medeval,
 }
 
 

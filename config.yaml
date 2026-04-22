@@ -1,10 +1,19 @@
 # BayesEval run configuration. Edit this file instead of passing flags.
 
 domains:                    # list of domain names or {name, benchmark_file} dicts, or "all"
-  - LifeEval
-  - WGD
-  - name: MedEval
-    benchmark_file: benchmark_combined.csv
+  # - LifeEval
+  # - WGD
+  # - name: MedEval
+  #   benchmark_file: benchmark_combined.csv
+  - name: LifeEval_SPD
+    benchmark_file: benchmark_spd.csv
+    spd: true
+  # - name: WGD_SPD          # done (928/928), retry errors after
+  #   benchmark_file: benchmark_spd.csv
+  #   spd: true
+  - name: MedEval_SPD
+    benchmark_file: benchmark_spd.csv
+    spd: true
 
 models:                     # OpenRouter model slugs
   - google/gemini-2.5-flash
@@ -14,7 +23,7 @@ models:                     # OpenRouter model slugs
 
 mode: batch                 # batch (async, concurrent) | seq (one at a time)
 concurrency: 12              # only used when mode: batch
-max_questions: null         # null = full benchmark; int to truncate for quick runs
+max_questions: null            # null = full benchmark; int to truncate for quick runs
 output_dir: results         # relative to repo root
 
 openrouter:
