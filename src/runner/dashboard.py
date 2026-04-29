@@ -36,20 +36,26 @@ class _TaskState:
 
 
 class Dashboard:
-    def __init__(self, title: str):
+    def __init__(self, title: str, show_price: bool = False,
+                 pricing: dict[str, tuple[float, float]] | None = None,
+                 static: bool = False):
         self.title = title
+        self.show_price = show_price
+        self.pricing = pricing or {}
         self._tasks: dict[tuple[str, str], _TaskState] = {}
         self._start = time.monotonic()
         self._recent: deque[str] = deque(maxlen=6)
-        self._progress = Progress(
-            SpinnerColumn(),
+        columns = [
             TextColumn("[progress.description]{task.description:<40}"),
             BarColumn(bar_width=32),
             MofNCompleteColumn(),
             TextColumn("[cyan]{task.fields[speed]:>5.1f} req/s[/cyan]"),
-            TimeRemainingColumn(),
-            TimeElapsedColumn(),
-        )
+        ]
+        if not static:
+            columns.insert(0, SpinnerColumn())
+            columns.append(TimeRemainingColumn())
+            columns.append(TimeElapsedColumn())
+        self._progress = Progress(*columns)
         self._overall_task = self._progress.add_task(
             "[bold white]Overall[/bold white]", total=0, speed=0.0
         )
@@ -105,14 +111,19 @@ class Dashboard:
             t.add_column("Err", justify="right")
             t.add_column("Tok In", justify="right")
             t.add_column("Tok Out", justify="right")
-            t.add_column("Brier", justify="right")
+            t.add_column("Price" if self.show_price else "Brier", justify="right")
             for model, st in by_domain[domain]:
                 short = model.split("/")[-1]
                 err_str = f"[red]{st.errors}[/red]" if st.errors else "[dim]0[/dim]"
-                brier_str = f"{st.brier_sum / st.brier_n:.4f}" if st.brier_n else "—"
+                if self.show_price:
+                    in_rate, out_rate = self.pricing.get(model, (0, 0))
+                    price = st.tok_in * in_rate + st.tok_out * out_rate
+                    last_col = f"[green]${price:.3f}[/green]"
+                else:
+                    last_col = f"{st.brier_sum / st.brier_n:.4f}" if st.brier_n else "—"
                 t.add_row(
                     short, str(st.done), err_str,
-                    f"{st.tok_in:,}", f"{st.tok_out:,}", brier_str,
+                    f"{st.tok_in:,}", f"{st.tok_out:,}", last_col,
                 )
             panels.append(Panel(t, title=f"[bold]{domain}[/bold]", border_style="dim"))
         return Columns(panels, equal=True)
@@ -126,6 +137,18 @@ class Dashboard:
         n_models = len(set(m for _, m in self._tasks))
         n_domains = len(set(d for d, _ in self._tasks))
         total = sum(s.total for s in self._tasks.values())
+        if self.show_price:
+            total_price = sum(
+                st.tok_in * self.pricing.get(model, (0, 0))[0]
+                + st.tok_out * self.pricing.get(model, (0, 0))[1]
+                for (_, model), st in self._tasks.items()
+            )
+            subtitle = (
+                f"[dim]{n_models} model(s) · {n_domains} domain(s) "
+                f"· {total} requests · [green]${total_price:.2f}[/green] total[/dim]"
+            )
+        else:
+            subtitle = f"[dim]{n_models} model(s) · {n_domains} domain(s) · {total} requests[/dim]"
         return Panel(
             Group(
                 self._progress,
@@ -137,7 +160,7 @@ class Dashboard:
             ),
             title=f"[bold cyan]{self.title}[/bold cyan]",
             border_style="cyan",
-            subtitle=f"[dim]{n_models} model(s) · {n_domains} domain(s) · {total} requests[/dim]",
+            subtitle=subtitle,
         )
 
     def __enter__(self):

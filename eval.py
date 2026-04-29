@@ -324,12 +324,84 @@ async def _retry_main(cfg: dict) -> None:
         print("\n" + summary.to_string(index=False))
 
 
+def _dummy_main() -> None:
+    """Show dashboard with fake data for screenshots — no API calls."""
+    import random
+
+    from rich.console import Console
+
+    random.seed(42)
+
+    domains = {
+        "LifeEval": 186, "LifeEval_SPD": 186,
+        "WGD": 928, "WGD_SPD": 928,
+        "MedEval": 312, "MedEval_SPD": 312,
+    }
+    models = [
+        "google/gemini-2.5-flash",
+        "openai/gpt-5.4-mini",
+        "anthropic/claude-haiku-4.5",
+        "meta-llama/llama-4-maverick",
+    ]
+    pricing = {
+        "google/gemini-2.5-flash": (0.15e-6, 0.60e-6),
+        "openai/gpt-5.4-mini": (0.30e-6, 1.20e-6),
+        "anthropic/claude-haiku-4.5": (0.80e-6, 4.00e-6),
+        "meta-llama/llama-4-maverick": (0.20e-6, 0.60e-6),
+    }
+
+    dash = Dashboard("BayesEval", show_price=True, pricing=pricing, static=True)
+    for domain, total in domains.items():
+        for model in models:
+            dash.register(domain, model, total=total)
+
+    for (domain, model), st in dash._tasks.items():
+        done = random.randint(int(st.total * 0.4), st.total)
+        errors = random.randint(0, max(1, int(done * 0.02)))
+        st.done = done
+        st.errors = errors
+        st.tok_in = done * random.randint(900, 1800)
+        st.tok_out = done * random.randint(150, 350)
+        dash._progress.update(
+            st.progress_task_id, completed=done,
+            speed=random.uniform(8.0, 15.0),
+        )
+
+    done_total = sum(s.done for s in dash._tasks.values())
+    dash._progress.update(
+        dash._overall_task, completed=done_total,
+        speed=random.uniform(10.0, 14.0),
+    )
+
+    sample_answers = ["Yes", "No", "0.73", "Positive", "A", "B", "0.85", "Negative"]
+    for _ in range(6):
+        model = random.choice(models)
+        short = model.split("/")[-1]
+        qid = f"Q{random.randint(1, 500):04d}"
+        if random.random() < 0.15:
+            dash._recent.append(
+                f"[red]✗[/red] [dim]{qid}[/dim] [cyan]{short}[/cyan] → [red]error[/red]"
+            )
+        else:
+            ans = random.choice(sample_answers)
+            dash._recent.append(
+                f"[green]✓[/green] [dim]{qid}[/dim] [cyan]{short}[/cyan] → [bold]{ans}[/bold]"
+            )
+
+    Console().print(dash)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=Path, default=REPO_ROOT / "config.yaml")
     ap.add_argument("--retry-errors", action="store_true",
                     help="Re-run only errored questions from existing results")
+    ap.add_argument("--dummy", action="store_true",
+                    help="Show dashboard with fake data for screenshots (no API calls)")
     args = ap.parse_args()
+    if args.dummy:
+        _dummy_main()
+        return
     cfg = load_config(args.config)
     if args.retry_errors:
         asyncio.run(_retry_main(cfg))
