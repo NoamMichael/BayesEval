@@ -13,3 +13,4 @@ thoughts/
 .venv
 .claude
 *__pycache__
+.env
