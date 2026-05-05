@@ -75,7 +75,7 @@ All prompts are sent as a single `user` message with no system message. For stan
 > Candidate pathologies:
 > {candidates}
 
-Where `{vignette}` is a JSON object containing patient demographics and clinical findings, and `{candidates}` is a bullet list of possible diagnoses. Evidence-removal variants (0%, 10%, 25%, 50%) use the same template with fewer findings.
+Where `{vignette}` is a JSON object containing patient demographics and clinical findings, and `{candidates}` is a bullet list of possible diagnoses. Candidate-removal variants (0%, 10%, 25%, 50%) present fewer diagnostic options with renormalized probabilities.
 
 **confidence_prompt:**
 

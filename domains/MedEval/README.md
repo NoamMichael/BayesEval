@@ -55,12 +55,7 @@ Only patients with **10+ candidates** in their differential are used, ensuring t
 ## Build
 
 ```bash
-# Generate candidate-removal variants (primary benchmark)
 python build_benchmark.py --n 500 --min-candidates 10 \
-    --candidate-removal-pcts 0,10,25,50
-
-# Legacy: evidence-removal variants (deprecated — ground truth is approximate)
-python build_benchmark.py --n 500 --min-findings 10 \
     --removal-pcts 0,10,25,50
 ```
 
@@ -74,15 +69,14 @@ python build_benchmark.py --n 500 --min-findings 10 \
 | `--seed` | 0 | Random seed for patient sampling and shuffling |
 | `--min-candidates` | 0 | Minimum candidates in differential (use 10 for candidate-removal) |
 | `--min-findings` | 0 | Minimum symptoms per patient |
-| `--candidate-removal-pcts` | None | Comma-separated candidate removal percentages |
-| `--removal-pcts` | `0` | Comma-separated evidence removal percentages (legacy) |
+| `--removal-pcts` | `0` | Comma-separated candidate removal percentages |
 | `--outdir` | `Data/` | Output directory |
 
 ### Output files
 
-- `benchmark_candidates{pct}.csv` — individual variant files
-- `benchmark_candidates_combined.csv` — all variants merged with `candidate_removal_pct` column
-- Columns: `question_id, question_prompt, confidence_prompt, age, sex, true_pathology, differential_json`
+- `benchmark_remove{pct}.csv` — individual variant files
+- `benchmark_combined.csv` — all variants merged with `removal_pct` column
+- Columns: `question_id, question_prompt, confidence_prompt, age, sex, true_pathology, differential_json, removal_pct`
 
 ## Scoring
 

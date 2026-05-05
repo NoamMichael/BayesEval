@@ -145,7 +145,7 @@ def main():
         w.writerow([
             "question_id", "question_prompt", "confidence_prompt",
             "age", "sex", "true_pathology", "differential_json",
-            "candidate_removal_pct",
+            "removal_pct",
         ])
 
         for pct in cpcts:

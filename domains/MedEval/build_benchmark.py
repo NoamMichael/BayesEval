@@ -9,14 +9,18 @@ symptom list (translated from E-codes via release_evidences.json) alongside
 the candidate pathologies (shuffled). The model picks a single diagnosis and
 reports a confidence.
 
+Difficulty is controlled by removing candidate pathologies and renormalizing
+the differential. Fewer candidates = easier task.
+
 Columns written:
     question_id, question_prompt, confidence_prompt, age, sex,
-    true_pathology, differential_json
+    true_pathology, differential_json, removal_pct
 
 true_probability is computed at scoring time as differential[model_answer].
 
 Usage:
-    python build_benchmark.py --ddxplus ../../../ddxplus/22687585 --n 500
+    python build_benchmark.py --ddxplus ../../../ddxplus/22687585 --n 500 \
+        --min-candidates 10 --removal-pcts 0,10,25,50
 """
 
 import argparse
@@ -84,39 +88,6 @@ def iter_patients(patients_zip: Path):
         yield row
 
 
-def write_variant(pool, pct, emap, split, seed, outpath):
-    """Write a single benchmark CSV for a given evidence-removal percentage."""
-    rng_variant = random.Random(seed + pct)
-    with open(outpath, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow([
-            "question_id", "question_prompt", "confidence_prompt",
-            "age", "sex", "true_pathology", "differential_json",
-        ])
-        for i, p in enumerate(pool):
-            evidences = ast.literal_eval(p["EVIDENCES"])
-            differential = ast.literal_eval(p["DIFFERENTIAL_DIAGNOSIS"])
-
-            n_remove = math.ceil(len(evidences) * pct / 100)
-            if n_remove > 0:
-                remove_idx = set(rng_variant.sample(range(len(evidences)), n_remove))
-                evidences = [e for j, e in enumerate(evidences) if j not in remove_idx]
-
-            vignette = build_vignette(p["AGE"], p["SEX"], evidences, emap)
-            candidates = [name for name, _ in differential]
-            rng_variant.shuffle(candidates)
-            candidates_str = "\n".join(f"- {c}" for c in candidates)
-            w.writerow([
-                f"med_{split}_{i:05d}_r{pct}",
-                PATHOLOGY_INSTRUCTION.format(
-                    vignette=vignette, candidates=candidates_str),
-                CONFIDENCE_INSTRUCTION,
-                p["AGE"], p["SEX"], p["PATHOLOGY"],
-                json.dumps(differential),
-            ])
-    return len(pool)
-
-
 def reduce_candidates(differential, true_pathology, pct_remove, rng):
     """Remove pct_remove% of candidate pathologies and renormalize.
 
@@ -128,20 +99,15 @@ def reduce_candidates(differential, true_pathology, pct_remove, rng):
         return differential
 
     n_remove = math.ceil(len(differential) * pct_remove / 100)
-    # Never remove the true pathology, never remove all candidates
     max_remove = len(differential) - 1
     n_remove = min(n_remove, max_remove)
 
-    # Sort non-true pathologies by probability (ascending) to remove least likely first
     removable = [(name, prob) for name, prob in differential if name != true_pathology]
     removable.sort(key=lambda x: x[1])
 
-    # Remove the n_remove least likely (but if true_pathology is least likely, skip it)
     to_remove = set(name for name, _ in removable[:n_remove])
-
     reduced = [(name, prob) for name, prob in differential if name not in to_remove]
 
-    # Renormalize
     total = sum(prob for _, prob in reduced)
     if total > 0:
         reduced = [(name, prob / total) for name, prob in reduced]
@@ -149,7 +115,7 @@ def reduce_candidates(differential, true_pathology, pct_remove, rng):
     return reduced
 
 
-def write_candidate_variant(pool, pct, emap, split, seed, outpath):
+def write_variant(pool, pct, emap, split, seed, outpath):
     """Write a benchmark CSV with pct% of candidate pathologies removed."""
     rng_variant = random.Random(seed + pct)
     with open(outpath, "w", newline="") as f:
@@ -196,9 +162,7 @@ def main():
     ap.add_argument("--min-candidates", type=int, default=0,
                     help="Keep only patients with >= this many candidates in differential")
     ap.add_argument("--removal-pcts", default="0",
-                    help="Comma-separated evidence removal percentages (e.g. 0,10,25,50)")
-    ap.add_argument("--candidate-removal-pcts", default=None,
-                    help="Comma-separated candidate pathology removal percentages (e.g. 0,10,25,50)")
+                    help="Comma-separated candidate removal percentages (e.g. 0,10,25,50)")
     args = ap.parse_args()
 
     emap = load_evidence_map(args.ddxplus / "release_evidences.json")
@@ -227,7 +191,7 @@ def main():
         outpath = args.outdir / f"benchmark_remove{pct}.csv"
         n = write_variant(pool, pct, emap, args.split, args.seed, outpath)
         variant_paths.append(outpath)
-        print(f"Wrote {n} questions to {outpath}")
+        print(f"Wrote {n} questions (candidates -{pct}%) to {outpath}")
 
     if len(pcts) > 1:
         combined = args.outdir / "benchmark_combined.csv"
@@ -245,33 +209,6 @@ def main():
                     for row in reader:
                         w.writerow(row + [str(pct)])
         print(f"Wrote combined benchmark ({len(pool) * len(pcts)} questions) to {combined}")
-
-    # Candidate-removal variants
-    if args.candidate_removal_pcts:
-        cpcts = [int(x) for x in args.candidate_removal_pcts.split(",")]
-        cvariant_paths = []
-        for pct in cpcts:
-            outpath = args.outdir / f"benchmark_candidates{pct}.csv"
-            n = write_candidate_variant(pool, pct, emap, args.split, args.seed, outpath)
-            cvariant_paths.append(outpath)
-            print(f"Wrote {n} questions (candidates -{pct}%) to {outpath}")
-
-        if len(cpcts) > 1:
-            combined = args.outdir / "benchmark_candidates_combined.csv"
-            with open(combined, "w", newline="") as fout:
-                w = csv.writer(fout)
-                w.writerow([
-                    "question_id", "question_prompt", "confidence_prompt",
-                    "age", "sex", "true_pathology", "differential_json",
-                    "candidate_removal_pct",
-                ])
-                for pct, vpath in zip(cpcts, cvariant_paths):
-                    with open(vpath) as fin:
-                        reader = csv.reader(fin)
-                        next(reader)
-                        for row in reader:
-                            w.writerow(row + [str(pct)])
-            print(f"Wrote combined candidates benchmark ({len(pool) * len(cpcts)} questions) to {combined}")
 
 
 if __name__ == "__main__":

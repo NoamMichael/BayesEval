@@ -6,6 +6,8 @@ domains/**/Photos-encoded/
 results/
 test-results/
 
+analysis/figs/poster/
+
 thoughts/
 
 .venv
