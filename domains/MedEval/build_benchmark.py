@@ -41,9 +41,12 @@ PATHOLOGY_INSTRUCTION = (
 )
 
 CONFIDENCE_INSTRUCTION = (
-    "How confident are you (0 to 1) that your chosen pathology is the correct "
-    "diagnosis? Respond with ONLY valid JSON: "
-    '{"Answer": "<pathology>", "Confidence": "0.XX"}'
+    "There are {n_candidates} candidate pathologies. Estimate the probability "
+    "(0 to 1) that your chosen pathology is the correct diagnosis for this "
+    "patient, given only the symptoms and candidates provided. A uniform prior "
+    "would assign {uniform_prior:.2f} to each candidate. "
+    "Respond with ONLY valid JSON: "
+    '{{"Answer": "<pathology>", "Confidence": "0.XX"}}'
 )
 
 
@@ -135,11 +138,14 @@ def write_variant(pool, pct, emap, split, seed, outpath):
             candidates = [name for name, _ in reduced_diff]
             rng_variant.shuffle(candidates)
             candidates_str = "\n".join(f"- {c}" for c in candidates)
+            n_candidates = len(candidates)
             w.writerow([
                 f"med_{split}_{i:05d}_c{pct}",
                 PATHOLOGY_INSTRUCTION.format(
                     vignette=vignette, candidates=candidates_str),
-                CONFIDENCE_INSTRUCTION,
+                CONFIDENCE_INSTRUCTION.format(
+                    n_candidates=n_candidates,
+                    uniform_prior=1.0 / n_candidates),
                 p["AGE"], p["SEX"], p["PATHOLOGY"],
                 json.dumps(reduced_diff),
             ])

@@ -1,16 +1,16 @@
 # BayesEval run configuration. Edit this file instead of passing flags.
 
 domains:                    # list of domain names or {name, benchmark_file} dicts, or "all"
-  - LifeEval
-  - WGD
-  - name: MedEval
-    benchmark_file: benchmark_combined.csv
-  - name: LifeEval_SPD
-    benchmark_file: benchmark_spd.csv
-    spd: true
-  - name: WGD_SPD          # done (928/928), retry errors after
-    benchmark_file: benchmark_spd.csv
-    spd: true
+  # - LifeEval
+  # - WGD
+  # - name: MedEval
+  #   benchmark_file: benchmark_combined.csv
+  # - name: LifeEval_SPD
+  #   benchmark_file: benchmark_spd.csv
+  #   spd: true
+  # - name: WGD_SPD          # done (928/928), retry errors after
+  #   benchmark_file: benchmark_spd.csv
+  #   spd: true
   - name: MedEval_SPD
     benchmark_file: benchmark_spd.csv
     spd: true
