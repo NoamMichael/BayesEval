@@ -8,6 +8,8 @@ BayesEval measures whether language models can produce well-calibrated probabili
 
 Each domain in BayesEval presents a different class of Bayesian inference problem with known analytical ground truth, enabling precise measurement of calibration quality.
 
+We evaluate four frontier LLMs — Claude Haiku 4.5, Gemini 2.5 Flash, Llama 4 Maverick, and GPT-5.4 Mini — via the OpenRouter API. Each domain is tested in two prompting modes: **Direct Confidence Elicitation (DCE)**, where the model reports a single point estimate and scalar confidence, and **Subjective Probability Distribution (SPD)**, where the model outputs a distribution over bins or candidates.
+
 ## Domains
 
 | Domain | Description | Ground Truth Source |
@@ -79,7 +81,7 @@ Where `{vignette}` is a JSON object containing patient demographics and clinical
 
 **confidence_prompt:**
 
-> How confident are you (0 to 1) that your chosen pathology is the correct diagnosis? Respond with ONLY valid JSON: {"Answer": "\<pathology\>", "Confidence": "0.XX"}
+> There are {n\_candidates} candidate pathologies. Estimate the probability (0 to 1) that your chosen pathology is the correct diagnosis for this patient, given only the symptoms and candidates provided. A uniform prior would assign {uniform\_prior} to each candidate. Respond with ONLY valid JSON: {"Answer": "\<pathology\>", "Confidence": "0.XX"}
 
 ### MedEval_SPD
 
@@ -111,15 +113,45 @@ All domains share a common scoring framework based on strictly proper scoring ru
 
 A perfectly calibrated model reports confidence `c` equal to the true probability `p` for each question, yielding `BS = 0`.
 
+## Models
+
+| Model | OpenRouter Slug |
+|-------|-----------------|
+| Claude Haiku 4.5 | `anthropic/claude-haiku-4.5` |
+| Gemini 2.5 Flash | `google/gemini-2.5-flash` |
+| Llama 4 Maverick | `meta-llama/llama-4-maverick` |
+| GPT-5.4 Mini | `openai/gpt-5.4-mini` |
+
+Model selection, concurrency, and run parameters are configured in `config.yaml`.
+
 ## Research Questions
 
-Analysis lives in `analysis/analysis.ipynb`. Figures are saved to `analysis/figs/`.
+Analysis lives in `analysis/analysis.ipynb`; auditable fact-checking in `analysis/fast_facts.ipynb`. Figures are saved to `analysis/figs/`.
 
 ### RQ 1: What is the nature of LLM calibration?
 
 Combined calibration curves for all models across all three domains. Each subplot overlays all models on one axis; dot size reflects the number of samples in that confidence bin.
 
 ![Calibration Curves](analysis/figs/calibration_combined.png)
+
+Summary of model calibration across all domains and prompting modes. Accuracy denotes mean correctness (WGD) or mean true probability (LifeEval, MedEval). Overconfidence = Mean Confidence − Accuracy. β₁ is the OLS slope of overconfidence on difficulty percentile (see RQ 2). ECE_SPD and ΔECE show the effect of SPD prompting (see RQ 3).
+
+| Domain | Model | Accuracy | Mean Conf. | Overconf. | β₁ | ECE | ECE_SPD | ΔECE (%) |
+|--------|-------|----------|------------|-----------|-----|-----|---------|----------|
+| WGD | Claude Haiku 4.5 | 0.385 | 0.274 | −0.111 | +0.433\*\*\* | 0.123 | 0.081 | −34.0\* |
+| WGD | Gemini 2.5 Flash | 0.421 | 0.638 | +0.217 | +0.556\*\*\* | 0.217 | 0.072 | −67.0\*\*\* |
+| WGD | Llama 4 Maverick | 0.372 | 0.588 | +0.216 | +0.471\*\*\* | 0.216 | 0.074 | −66.0\*\*\* |
+| WGD | GPT-5.4 Mini | 0.427 | 0.443 | +0.016 | +0.237\*\*\* | 0.046 | 0.087 | +89.0\*\*\* |
+| LifeEval | Claude Haiku 4.5 | 0.632 | 0.660 | +0.029 | +0.734\*\*\* | 0.037 | 0.162 | +334.8\*\*\* |
+| LifeEval | Gemini 2.5 Flash | 0.650 | 0.766 | +0.116 | +0.804\*\*\* | 0.116 | 0.103 | −11.6 |
+| LifeEval | Llama 4 Maverick | 0.646 | 0.819 | +0.174 | +0.794\*\*\* | 0.196 | 0.171 | −12.9\*\* |
+| LifeEval | GPT-5.4 Mini | 0.639 | 0.597 | −0.042 | +0.450\*\*\* | 0.059 | 0.052 | −11.9 |
+| MedEval | Claude Haiku 4.5 | 0.145 | 0.823 | +0.678 | +0.120\*\*\* | 0.678 | 0.360 | −46.8\*\*\* |
+| MedEval | Gemini 2.5 Flash | 0.148 | 0.870 | +0.722 | +0.130\*\*\* | 0.722 | 0.420 | −41.9\*\*\* |
+| MedEval | Llama 4 Maverick | 0.148 | 0.786 | +0.637 | +0.115\*\*\* | 0.637 | 0.361 | −43.4\*\*\* |
+| MedEval | GPT-5.4 Mini | 0.148 | 0.914 | +0.766 | +0.158\*\*\* | 0.766 | 0.463 | −39.5\*\*\* |
+
+\*p<0.05, \*\*p<0.01, \*\*\*p<0.001
 
 ### RQ 2: What role does task difficulty play in model calibration?
 
@@ -133,23 +165,63 @@ Overconfidence (`Confidence - true_probability`) plotted against each domain's d
 
 ![Overconfidence by Difficulty](analysis/figs/overconfidence_by_difficulty.png)
 
+All 12 β₁ slopes are significantly positive (p < 0.001), indicating that overconfidence systematically increases with task difficulty across all models and domains.
+
+### RQ 3: Does prompting models to output SPDs improve calibration?
+
+SPD prompting asks models to output a probability distribution over bins (WGD, LifeEval) or candidates (MedEval) rather than a single point estimate and scalar confidence. The modal bin's or candidate's confidence is compared against the same ground truth used in DCE scoring.
+
+![SPD Calibration Curves](analysis/figs/calibration_spd_combined.png)
+
+![ECE Improvement](analysis/figs/rq3_ece_spd_improvement.png)
+
+SPD prompting significantly reduces ECE in 9 of 12 model–domain combinations. The effect is strongest in MedEval (39–47% reduction) and WGD (34–67% reduction for 3 of 4 models). Two cases show significant ECE *increases*: GPT-5.4 Mini on WGD (+89%) and Claude Haiku 4.5 on LifeEval (+335%). See the summary table above for all values and significance levels.
+
+## Post-Hoc Analyses
+
+### Sex Bias in WGD Weight Estimates
+
+We examine whether models systematically over- or under-estimate weight differently for male vs. female subjects. Directional error (Answer − true\_weight) is computed per photo, then averaged by sex. Welch's t-test assesses the significance of the mean error difference (Male − Female) with 95% CIs.
+
+![Sex Bias in WGD](analysis/figs/posthoc_sex_bias_wgd.png)
+
+### Sensitivity of LifeEval Difficulty Metric to Y\_max
+
+The LifeEval difficulty metric depends on a maximum-age parameter Y\_max. We sweep Y\_max from 101 to 140 and measure rank-correlation (Spearman ρ) of difficulty percentiles against the reference (Y\_max = 120), alongside the mean overconfidence slope (β₁). Both metrics are stable across the range, confirming the difficulty ranking is robust to the Y\_max choice.
+
+![Sensitivity Analysis](analysis/figs/sensitivity_ymax.png)
+
 ## Project Structure
 
 ```
 BayesEval/
 ├── README.md
-├── CLAUDE.md              # Development conventions and agent instructions
-├── eval.py                # Cross-domain evaluation runner
-├── config.yaml            # Run configuration (domains, models, concurrency)
-├── requirements.txt       # Python dependencies
+├── CLAUDE.md
+├── eval.py                    # Config-driven evaluation runner
+├── config.yaml                # Run configuration (domains, models, concurrency)
+├── requirements.txt
+├── src/
+│   ├── runner/
+│   │   ├── executor.py        # Async task runner (DCE + SPD modes)
+│   │   ├── openrouter_client.py
+│   │   └── dashboard.py       # Live rich progress dashboard
+│   └── features/
+│       └── estimate_costs.py  # Pre-run cost estimator
 ├── analysis/
-│   ├── scoring.py         # Unified scoring module for all domains
-│   └── analysis.ipynb     # Calibration analysis and plots
+│   ├── scoring.py             # Unified scoring (Brier, Murphy, Gompertz CDF)
+│   ├── analysis.ipynb         # Main analysis notebook (RQ1–3, post-hoc)
+│   ├── fast_facts.ipynb       # Auditable fact-checking for paper
+│   ├── evaluate_diff.py
+│   ├── sensitivity_ymax.py
+│   ├── rq1_summary_table.txt  # LaTeX summary table
+│   └── figs/                  # All generated figures
 ├── domains/
-│   ├── WGD/               # Weight Guessing Dataset
-│   ├── LifeEval/          # Actuarial mortality estimation
-│   └── MedEval/           # Differential diagnosis
-└── thoughts/              # Research notes and experiment logs
+│   ├── WGD/                   # Weight Guessing Dataset
+│   ├── LifeEval/              # Actuarial mortality estimation
+│   └── MedEval/               # Differential diagnosis
+├── docs/                      # Pipeline documentation per domain
+├── results/                   # Raw model outputs (git-ignored)
+└── thoughts/                  # Research notes and experiment logs
 ```
 
 ## Getting Started
@@ -171,7 +243,8 @@ The config selects `domains` (list of folder names under `domains/`, or `all`),
 `models` (OpenRouter slugs), `mode` (`batch` async or `seq`), and `concurrency`.
 A live `rich` dashboard tracks progress per `(domain, model)` task. Raw
 responses land in `results/<domain>/<model>.csv`; a combined `results/summary.csv`
-is written at the end.
+is written at the end. SPD domains are configured with `spd: true` and a separate
+`benchmark_spd.csv`.
 
 Scoring for all domains is in `analysis/scoring.py`. To add a new domain,
 add a scorer function there and register it in `_SCORERS`, then create
